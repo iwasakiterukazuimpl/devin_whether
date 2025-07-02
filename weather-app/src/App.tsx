@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import './App.css'
 import { Search } from 'lucide-react'
+import { fetchWeather, WeatherAPIError } from './services/weatherService'
 
 interface WeatherData {
   city: string
@@ -18,6 +19,7 @@ interface SearchBarProps {
 
 interface WeatherDisplayProps {
   weatherData: WeatherData | null
+  error: string | null
 }
 
 function SearchBar({ value, onChange, onSearch, disabled }: SearchBarProps) {
@@ -41,13 +43,21 @@ function SearchBar({ value, onChange, onSearch, disabled }: SearchBarProps) {
         className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 justify-center"
       >
         <Search size={16} />
-        検索
+        {disabled ? '検索中...' : '検索'}
       </button>
     </div>
   )
 }
 
-function WeatherDisplay({ weatherData }: WeatherDisplayProps) {
+function WeatherDisplay({ weatherData, error }: WeatherDisplayProps) {
+  if (error) {
+    return (
+      <div className="mt-8 p-6 bg-red-50 rounded-lg text-center border border-red-200">
+        <p className="text-red-600 text-lg">{error}</p>
+      </div>
+    )
+  }
+
   if (!weatherData) {
     return (
       <div className="mt-8 p-6 bg-gray-50 rounded-lg text-center">
@@ -81,20 +91,31 @@ function WeatherDisplay({ weatherData }: WeatherDisplayProps) {
 function App() {
   const [cityInput, setCityInput] = useState('')
   const [weatherData, setWeatherData] = useState<WeatherData | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleSearch = () => {
-    if (cityInput.trim()) {
-      const dummyWeatherData: WeatherData = {
-        city: cityInput.trim(),
-        temperature: Math.floor(Math.random() * 30) + 5,
-        description: ['晴れ', '曇り', '雨', '雪', '霧'][Math.floor(Math.random() * 5)],
-        icon: `https://openweathermap.org/img/wn/01d@2x.png`
+  const handleSearch = async () => {
+    if (!cityInput.trim()) return
+
+    setIsLoading(true)
+    setError(null)
+    setWeatherData(null)
+
+    try {
+      const data = await fetchWeather(cityInput)
+      setWeatherData(data)
+    } catch (err) {
+      if (err instanceof WeatherAPIError) {
+        setError(err.message)
+      } else {
+        setError('予期しないエラーが発生しました。')
       }
-      setWeatherData(dummyWeatherData)
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const isSearchDisabled = cityInput.trim() === ''
+  const isSearchDisabled = cityInput.trim() === '' || isLoading
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-8 px-4">
@@ -113,7 +134,7 @@ function App() {
           />
         </div>
 
-        <WeatherDisplay weatherData={weatherData} />
+        <WeatherDisplay weatherData={weatherData} error={error} />
       </div>
     </div>
   )
