@@ -1,26 +1,30 @@
 import { useState } from 'react'
 import './App.css'
-import { Search } from 'lucide-react'
-
-interface WeatherData {
-  city: string
-  temperature: number
-  description: string
-  icon: string
-}
+import { Search, Loader2, AlertCircle } from 'lucide-react'
+import { useWeather } from './hooks/useWeather'
 
 interface SearchBarProps {
   value: string
   onChange: (value: string) => void
   onSearch: () => void
   disabled: boolean
+  loading: boolean
 }
 
 interface WeatherDisplayProps {
-  weatherData: WeatherData | null
+  weatherData: {
+    city: string
+    temperature: number
+    description: string
+    icon: string
+    humidity?: number
+    windSpeed?: number
+  } | null
+  loading: boolean
+  error: string | null
 }
 
-function SearchBar({ value, onChange, onSearch, disabled }: SearchBarProps) {
+function SearchBar({ value, onChange, onSearch, disabled, loading }: SearchBarProps) {
   return (
     <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
       <input
@@ -30,24 +34,47 @@ function SearchBar({ value, onChange, onSearch, disabled }: SearchBarProps) {
         onChange={(e) => onChange(e.target.value)}
         className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         onKeyPress={(e) => {
-          if (e.key === 'Enter' && !disabled) {
+          if (e.key === 'Enter' && !disabled && !loading) {
             onSearch()
           }
         }}
+        disabled={loading}
       />
       <button
         onClick={onSearch}
-        disabled={disabled}
-        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 justify-center"
+        disabled={disabled || loading}
+        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center gap-2 justify-center min-w-[100px]"
       >
-        <Search size={16} />
-        検索
+        {loading ? (
+          <Loader2 size={16} className="animate-spin" />
+        ) : (
+          <Search size={16} />
+        )}
+        {loading ? '検索中...' : '検索'}
       </button>
     </div>
   )
 }
 
-function WeatherDisplay({ weatherData }: WeatherDisplayProps) {
+function WeatherDisplay({ weatherData, loading, error }: WeatherDisplayProps) {
+  if (loading) {
+    return (
+      <div className="mt-8 p-6 bg-gray-50 rounded-lg text-center">
+        <Loader2 size={32} className="animate-spin mx-auto mb-4 text-blue-500" />
+        <p className="text-gray-600 text-lg">天気情報を取得中...</p>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="mt-8 p-6 bg-red-50 rounded-lg text-center border border-red-200">
+        <AlertCircle size={32} className="mx-auto mb-4 text-red-500" />
+        <p className="text-red-600 text-lg">{error}</p>
+      </div>
+    )
+  }
+
   if (!weatherData) {
     return (
       <div className="mt-8 p-6 bg-gray-50 rounded-lg text-center">
@@ -73,6 +100,16 @@ function WeatherDisplay({ weatherData }: WeatherDisplayProps) {
         <p className="text-lg text-gray-600 capitalize">
           {weatherData.description}
         </p>
+        {weatherData.humidity && (
+          <p className="text-sm text-gray-500">
+            湿度: {weatherData.humidity}%
+          </p>
+        )}
+        {weatherData.windSpeed && (
+          <p className="text-sm text-gray-500">
+            風速: {weatherData.windSpeed} m/s
+          </p>
+        )}
       </div>
     </div>
   )
@@ -80,17 +117,11 @@ function WeatherDisplay({ weatherData }: WeatherDisplayProps) {
 
 function App() {
   const [cityInput, setCityInput] = useState('')
-  const [weatherData, setWeatherData] = useState<WeatherData | null>(null)
+  const { weatherData, loading, error, fetchWeather } = useWeather()
 
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (cityInput.trim()) {
-      const dummyWeatherData: WeatherData = {
-        city: cityInput.trim(),
-        temperature: Math.floor(Math.random() * 30) + 5,
-        description: ['晴れ', '曇り', '雨', '雪', '霧'][Math.floor(Math.random() * 5)],
-        icon: `https://openweathermap.org/img/wn/01d@2x.png`
-      }
-      setWeatherData(dummyWeatherData)
+      await fetchWeather(cityInput.trim())
     }
   }
 
@@ -110,10 +141,11 @@ function App() {
             onChange={setCityInput}
             onSearch={handleSearch}
             disabled={isSearchDisabled}
+            loading={loading}
           />
         </div>
 
-        <WeatherDisplay weatherData={weatherData} />
+        <WeatherDisplay weatherData={weatherData} loading={loading} error={error} />
       </div>
     </div>
   )
